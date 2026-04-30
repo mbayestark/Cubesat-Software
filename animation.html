@@ -1,0 +1,1173 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>2U CubeSat · Mission Animation · DAUST</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg: #050810;
+            --fg: #e5e7eb;
+            --dim: #6b7280;
+            --teal: #14b8a6;
+            --blue: #3b82f6;
+            --letterbox-h: 7vh;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            height: 100%;
+            overflow: hidden;
+            background: var(--bg);
+            color: var(--fg);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        #canvas-container {
+            position: fixed;
+            inset: 0;
+            z-index: 1;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        /* Cinematic letterbox */
+        .letterbox {
+            position: fixed;
+            left: 0;
+            right: 0;
+            height: var(--letterbox-h);
+            background: #000;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .letterbox.top {
+            top: 0;
+        }
+
+        .letterbox.bottom {
+            bottom: 0;
+        }
+
+        /* Scene title */
+        #scene-title {
+            position: fixed;
+            top: calc(var(--letterbox-h) + 24px);
+            left: 32px;
+            font-size: 12px;
+            font-weight: 500;
+            letter-spacing: 0.25em;
+            color: var(--teal);
+            z-index: 20;
+            opacity: 0;
+            transition: opacity 0.6s ease, transform 0.6s ease;
+            transform: translateY(-8px);
+        }
+
+        #scene-title.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        #scene-title::before {
+            content: '';
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            background: var(--teal);
+            border-radius: 50%;
+            margin-right: 12px;
+            vertical-align: middle;
+            box-shadow: 0 0 12px var(--teal);
+            animation: pulse 1.6s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.35;
+            }
+        }
+
+        #branding {
+            position: fixed;
+            top: calc(var(--letterbox-h) + 24px);
+            right: 32px;
+            font-size: 11px;
+            color: var(--dim);
+            letter-spacing: 0.18em;
+            z-index: 20;
+        }
+
+        #branding b {
+            color: var(--fg);
+            font-weight: 500;
+        }
+
+        /* Subtitle */
+        #subtitle {
+            position: fixed;
+            bottom: calc(var(--letterbox-h) + 64px);
+            left: 50%;
+            transform: translateX(-50%) translateY(8px);
+            max-width: 86vw;
+            text-align: center;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: clamp(18px, 2.2vw, 28px);
+            font-weight: 500;
+            letter-spacing: 0.005em;
+            color: var(--fg);
+            z-index: 20;
+            opacity: 0;
+            transition: opacity 0.7s ease, transform 0.7s ease;
+            text-shadow: 0 2px 24px rgba(0, 0, 0, 0.95);
+        }
+
+        #subtitle.visible {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* Progress */
+        #progress-container {
+            position: fixed;
+            bottom: calc(var(--letterbox-h) + 16px);
+            left: 32px;
+            right: 32px;
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        #progress-track {
+            flex: 1;
+            height: 1px;
+            background: rgba(255, 255, 255, 0.12);
+            position: relative;
+            overflow: hidden;
+        }
+
+        #progress-bar {
+            position: absolute;
+            inset: 0 auto 0 0;
+            width: 0%;
+            background: linear-gradient(90deg, var(--teal), var(--blue));
+            transition: width 0.1s linear;
+            box-shadow: 0 0 8px var(--teal);
+        }
+
+        #progress-segments {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            pointer-events: none;
+        }
+
+        .segment-tick {
+            border-right: 1px solid rgba(255, 255, 255, 0.18);
+        }
+
+        .segment-tick:last-child {
+            border-right: none;
+        }
+
+        #time-display {
+            font-size: 11px;
+            color: var(--dim);
+            letter-spacing: 0.15em;
+            min-width: 110px;
+            text-align: right;
+        }
+
+        #time-display .current {
+            color: var(--fg);
+        }
+
+        /* Controls */
+        #controls {
+            position: fixed;
+            bottom: calc(var(--letterbox-h) + 50px);
+            right: 32px;
+            z-index: 20;
+            display: flex;
+            gap: 8px;
+        }
+
+        .ctrl-btn {
+            width: 34px;
+            height: 34px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: var(--fg);
+            cursor: pointer;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            backdrop-filter: blur(8px);
+        }
+
+        .ctrl-btn:hover {
+            background: rgba(20, 184, 166, 0.12);
+            border-color: var(--teal);
+            color: var(--teal);
+        }
+
+        /* Loading */
+        #loading {
+            position: fixed;
+            inset: 0;
+            background: var(--bg);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 24px;
+            transition: opacity 0.8s ease;
+        }
+
+        #loading.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .loading-text {
+            font-size: 13px;
+            letter-spacing: 0.4em;
+            color: var(--teal);
+        }
+
+        .loading-bar {
+            width: 220px;
+            height: 1px;
+            background: rgba(255, 255, 255, 0.1);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .loading-bar::after {
+            content: '';
+            position: absolute;
+            inset: 0 auto 0 -30%;
+            width: 30%;
+            background: var(--teal);
+            animation: loading-slide 1.4s ease-in-out infinite;
+        }
+
+        @keyframes loading-slide {
+            0% {
+                left: -30%;
+            }
+
+            100% {
+                left: 100%;
+            }
+        }
+
+        .loading-detail {
+            font-size: 9px;
+            color: var(--dim);
+            letter-spacing: 0.2em;
+        }
+
+        /* Component labels (DOM overlay) */
+        .component-label {
+            position: absolute;
+            pointer-events: none;
+            font-size: 10px;
+            color: var(--fg);
+            background: rgba(5, 8, 16, 0.9);
+            border: 1px solid;
+            padding: 4px 10px;
+            letter-spacing: 0.15em;
+            z-index: 15;
+            transform: translate(-50%, -50%);
+            backdrop-filter: blur(4px);
+            transition: opacity 0.5s ease;
+            opacity: 0;
+            white-space: nowrap;
+            text-transform: uppercase;
+        }
+
+        .component-label.visible {
+            opacity: 1;
+        }
+
+        .component-label::before {
+            content: '';
+            display: inline-block;
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            margin-right: 8px;
+            vertical-align: middle;
+            background: currentColor;
+            box-shadow: 0 0 6px currentColor;
+        }
+
+        #hint {
+            position: fixed;
+            bottom: calc(var(--letterbox-h) - 24px);
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 20;
+            font-size: 9px;
+            color: var(--dim);
+            letter-spacing: 0.3em;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.6s ease;
+        }
+
+        #hint.visible {
+            opacity: 1;
+        }
+
+        /* Crosshairs in letterbox corners (cinematic touch) */
+        .crosshair {
+            position: fixed;
+            width: 14px;
+            height: 14px;
+            z-index: 11;
+            pointer-events: none;
+        }
+
+        .crosshair::before,
+        .crosshair::after {
+            content: '';
+            position: absolute;
+            background: var(--teal);
+            opacity: 0.4;
+        }
+
+        .crosshair::before {
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 1px;
+        }
+
+        .crosshair::after {
+            left: 0;
+            top: 0;
+            width: 1px;
+            height: 100%;
+        }
+
+        .crosshair.tl {
+            top: calc(var(--letterbox-h) + 8px);
+            left: 8px;
+        }
+
+        .crosshair.tr {
+            top: calc(var(--letterbox-h) + 8px);
+            right: 8px;
+            transform: scaleX(-1);
+        }
+
+        .crosshair.bl {
+            bottom: calc(var(--letterbox-h) + 8px);
+            left: 8px;
+            transform: scaleY(-1);
+        }
+
+        .crosshair.br {
+            bottom: calc(var(--letterbox-h) + 8px);
+            right: 8px;
+            transform: scale(-1, -1);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="canvas-container"></div>
+
+    <div class="letterbox top"></div>
+    <div class="letterbox bottom"></div>
+    <div class="crosshair tl"></div>
+    <div class="crosshair tr"></div>
+    <div class="crosshair bl"></div>
+    <div class="crosshair br"></div>
+
+    <div id="scene-title">01 / DEPLOYMENT</div>
+    <div id="branding">DAUST · <b>SAT-2U-001</b> · LEO 500KM</div>
+    <div id="subtitle">Initializing mission...</div>
+
+    <div id="progress-container">
+        <div id="time-display"><span class="current">00:00</span> / 00:54</div>
+        <div id="progress-track">
+            <div id="progress-bar"></div>
+            <div id="progress-segments"></div>
+        </div>
+    </div>
+
+    <div id="controls">
+        <button class="ctrl-btn" id="btn-pause" title="Pause / Play">⏸</button>
+        <button class="ctrl-btn" id="btn-restart" title="Restart">↺</button>
+    </div>
+
+    <div id="hint">SPACE · PAUSE ←/→ · SCENE R · RESTART</div>
+
+    <div id="loading">
+        <div class="loading-text">SAT-2U-001</div>
+        <div class="loading-bar"></div>
+        <div class="loading-detail">ESTABLISHING LINK · LOADING TELEMETRY · INITIALIZING 3D MODEL</div>
+    </div>
+
+    <script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+        // ============================================================
+        // STORYBOARD — each scene tied to the pitch script
+        // ============================================================
+        const scenes = [
+            {
+                id: '01 / DEPLOYMENT',
+                subtitle: 'Ejected from the dispenser into low Earth orbit',
+                duration: 7,
+                cameraStart: { pos: [0.5, 0.4, 6.5], look: [0, 0, 0] },
+                cameraEnd: { pos: [3, 1.2, 5.2], look: [0, 0, 0] },
+                onEnter: (s) => {
+                    s.satRotationSpeed = 0.18;
+                    s.satDrift = 0.5;
+                    s.activeComponents.clear();
+                    s.dataFlows.length = 0;
+                    s.showGroundLink = false;
+                }
+            },
+            {
+                id: '02 / POWER UP',
+                subtitle: 'Solar panels generate energy · EPS distributes power',
+                duration: 6,
+                cameraStart: { pos: [3, 1.2, 5.2], look: [0, 0, 0] },
+                cameraEnd: { pos: [2.4, 1.6, 3.6], look: [0, 0, 0] },
+                onEnter: (s) => {
+                    s.satRotationSpeed = 0.22;
+                    s.satDrift = 0;
+                    s.activeComponents.add('EPS');
+                }
+            },
+            {
+                id: '03 / OBC ONLINE',
+                subtitle: 'STM32 F446RE — the real-time controller awakens',
+                duration: 6,
+                cameraStart: { pos: [2.4, 1.6, 3.6], look: [0, 0, 0] },
+                cameraEnd: { pos: [1.6, 0.4, 2.4], look: [0.2, -0.4, 0] },
+                onEnter: (s) => {
+                    s.satRotationSpeed = 0.06;
+                    s.activeComponents.add('STM32');
+                }
+            },
+            {
+                id: '04 / DATA HANDLING',
+                subtitle: 'CAN bus link · STM32 ⇄ BeagleBone Black',
+                duration: 9,
+                cameraStart: { pos: [1.6, 0.4, 2.4], look: [0.2, -0.4, 0] },
+                cameraEnd: { pos: [1.0, 0.1, 2.1], look: [0, -0.4, 0] },
+                onEnter: (s) => {
+                    s.satRotationSpeed = 0.04;
+                    s.activeComponents.add('BBB');
+                    s.dataFlows.push({ from: 'STM32', to: 'BBB', color: 0x14b8a6, t: 0 });
+                    s.dataFlows.push({ from: 'BBB', to: 'STM32', color: 0x3b82f6, t: 0.5 });
+                }
+            },
+            {
+                id: '05 / TELEMETRY',
+                subtitle: 'Sensors stream data · MicroSD persistence · DHT11 environmental',
+                duration: 8,
+                cameraStart: { pos: [1.0, 0.1, 2.1], look: [0, -0.4, 0] },
+                cameraEnd: { pos: [-1.6, 0.7, 2.4], look: [0, 0, 0] },
+                onEnter: (s) => {
+                    s.satRotationSpeed = 0.06;
+                    s.activeComponents.add('DHT11');
+                    s.activeComponents.add('SD');
+                    s.dataFlows.push({ from: 'DHT11', to: 'STM32', color: 0x06b6d4, t: 0 });
+                    s.dataFlows.push({ from: 'STM32', to: 'SD', color: 0xa3a3a3, t: 0.3 });
+                }
+            },
+            {
+                id: '06 / GROUND LINK',
+                subtitle: 'LoRa downlink · 10-minute pass over Dakar',
+                duration: 9,
+                cameraStart: { pos: [-1.6, 0.7, 2.4], look: [0, 0, 0] },
+                cameraEnd: { pos: [4.5, 3.5, 7.5], look: [0, -2.5, 0] },
+                onEnter: (s) => {
+                    s.satRotationSpeed = 0.10;
+                    s.activeComponents.add('LORA');
+                    s.activeComponents.add('NRF');
+                    s.showGroundLink = true;
+                }
+            },
+            {
+                id: 'MISSION READY',
+                subtitle: 'DAUST · 2U CubeSat — Senegalese student-built spacecraft',
+                duration: 7,
+                cameraStart: { pos: [4.5, 3.5, 7.5], look: [0, -2.5, 0] },
+                cameraEnd: { pos: [-2.2, 1.0, 5], look: [0, 0, 0] },
+                onEnter: (s) => {
+                    s.satRotationSpeed = 0.14;
+                    s.showGroundLink = false;
+                }
+            }
+        ];
+
+        const totalDuration = scenes.reduce((a, s) => a + s.duration, 0);
+
+        // ============================================================
+        // COMPONENT MAP — abstract positions inside the CubeSat
+        // (independent of GLTF mesh names; works with any model)
+        // ============================================================
+        const COMPONENTS = {
+            STM32: { offset: [0.18, -0.55, 0.05], color: 0x3b82f6, label: 'STM32 F446RE · OBC' },
+            BBB: { offset: [-0.18, -0.18, 0.05], color: 0x10b981, label: 'BEAGLEBONE BLACK · PAYLOAD' },
+            LORA: { offset: [0.15, 0.65, 0.05], color: 0xf59e0b, label: 'LORA RYLR890 · 915MHz' },
+            NRF: { offset: [-0.15, 0.40, 0.05], color: 0xa855f7, label: 'NRF24L01 · 2.4GHZ' },
+            DHT11: { offset: [0.28, 0.15, 0.20], color: 0x06b6d4, label: 'DHT11 · TEMP/HUMIDITY' },
+            SD: { offset: [-0.25, -0.70, 0.20], color: 0xa3a3a3, label: 'MICROSD · STORAGE' },
+            EPS: { offset: [0.30, 0.00, -0.10], color: 0xfbbf24, label: 'EPS · POWER' }
+        };
+
+        // ============================================================
+        // THREE.JS SETUP
+        // ============================================================
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x050810);
+        scene.fog = new THREE.FogExp2(0x050810, 0.025);
+
+        const camera = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.1, 1000);
+        camera.position.set(0.5, 0.4, 6.5);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(innerWidth, innerHeight);
+        renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.15;
+        container.appendChild(renderer.domElement);
+
+        // Environment map for PBR metallic reflections
+        const pmremGenerator = new THREE.PMREMGenerator(renderer);
+        pmremGenerator.compileEquirectangularShader();
+
+        function createSpaceEnvMap() {
+            const envScene = new THREE.Scene();
+            // Subtle gradient sphere to give metallic surfaces something to reflect
+            const envGeo = new THREE.SphereGeometry(10, 32, 32);
+            const envMat = new THREE.MeshBasicMaterial({
+                color: 0x111822,
+                side: THREE.BackSide
+            });
+            envScene.add(new THREE.Mesh(envGeo, envMat));
+            // Bright spot simulating sun reflection
+            const sunSpot = new THREE.Mesh(
+                new THREE.SphereGeometry(1.5, 16, 16),
+                new THREE.MeshBasicMaterial({ color: 0xffeedd })
+            );
+            sunSpot.position.set(5, 3, 4);
+            envScene.add(sunSpot);
+            // Secondary reflection point (rim light)
+            const rimSpot = new THREE.Mesh(
+                new THREE.SphereGeometry(1, 16, 16),
+                new THREE.MeshBasicMaterial({ color: 0x14b8a6 })
+            );
+            rimSpot.position.set(-5, 2, -3);
+            envScene.add(rimSpot);
+            const envRT = pmremGenerator.fromScene(envScene, 0.04);
+            pmremGenerator.dispose();
+            return envRT.texture;
+        }
+        const envMap = createSpaceEnvMap();
+        scene.environment = envMap;
+
+        // Lighting — boosted for PBR metallic model visibility
+        scene.add(new THREE.AmbientLight(0x606880, 1.2));
+
+        // Hemisphere light for natural fill (sky/ground)
+        const hemiLight = new THREE.HemisphereLight(0x8899bb, 0x222233, 0.8);
+        scene.add(hemiLight);
+
+        const sunLight = new THREE.DirectionalLight(0xffffff, 3.5);
+        sunLight.position.set(5, 3, 4);
+        scene.add(sunLight);
+
+        const rimLight = new THREE.DirectionalLight(0x14b8a6, 1.2);
+        rimLight.position.set(-5, 2, -3);
+        scene.add(rimLight);
+
+        const fillLight = new THREE.DirectionalLight(0x3b82f6, 0.8);
+        fillLight.position.set(0, -3, 2);
+        scene.add(fillLight);
+
+        const backLight = new THREE.DirectionalLight(0xffffff, 1.0);
+        backLight.position.set(-3, 1, -4);
+        scene.add(backLight);
+
+        // ============================================================
+        // STARFIELD
+        // ============================================================
+        function createStars() {
+            const g = new THREE.BufferGeometry();
+            const n = 3000;
+            const pos = new Float32Array(n * 3);
+            for (let i = 0; i < n; i++) {
+                const r = 90 + Math.random() * 50;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+                pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+                pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+                pos[i * 3 + 2] = r * Math.cos(phi);
+            }
+            g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+            const m = new THREE.PointsMaterial({
+                color: 0xffffff, size: 0.09,
+                sizeAttenuation: true, transparent: true, opacity: 0.85
+            });
+            return new THREE.Points(g, m);
+        }
+        const stars = createStars();
+        scene.add(stars);
+
+        // Distant Earth (visible in wide shots)
+        function createEarth() {
+            const g = new THREE.SphereGeometry(16, 64, 64);
+            const m = new THREE.MeshStandardMaterial({
+                color: 0x1e3a5f,
+                emissive: 0x0a1f3a,
+                emissiveIntensity: 0.25,
+                roughness: 0.85, metalness: 0.1
+            });
+            const earth = new THREE.Mesh(g, m);
+            earth.position.set(0, -24, -8);
+
+            // Atmosphere halo
+            const ag = new THREE.SphereGeometry(16.5, 64, 64);
+            const am = new THREE.MeshBasicMaterial({
+                color: 0x4a90e2, transparent: true, opacity: 0.1, side: THREE.BackSide
+            });
+            earth.add(new THREE.Mesh(ag, am));
+            return earth;
+        }
+        const earth = createEarth();
+        scene.add(earth);
+
+        // ============================================================
+        // CUBESAT — load GLTF, fall back to procedural geometry
+        // ============================================================
+        const cubesatGroup = new THREE.Group();
+        scene.add(cubesatGroup);
+
+        function createFallbackCubesat() {
+            const g = new THREE.Group();
+
+            const bodyGeo = new THREE.BoxGeometry(1, 2.27, 1);
+            const bodyMat = new THREE.MeshStandardMaterial({
+                color: 0xa1a1aa, metalness: 0.85, roughness: 0.4
+            });
+            g.add(new THREE.Mesh(bodyGeo, bodyMat));
+
+            // Edge highlight
+            const edges = new THREE.LineSegments(
+                new THREE.EdgesGeometry(bodyGeo),
+                new THREE.LineBasicMaterial({ color: 0x14b8a6, transparent: true, opacity: 0.55 })
+            );
+            g.add(edges);
+
+            // Side solar panels
+            const panelGeo = new THREE.BoxGeometry(0.06, 2.0, 0.85);
+            const panelMat = new THREE.MeshStandardMaterial({
+                color: 0x1e40af, metalness: 0.6, roughness: 0.3,
+                emissive: 0x1d4ed8, emissiveIntensity: 0.18
+            });
+            const pL = new THREE.Mesh(panelGeo, panelMat); pL.position.x = -0.55; g.add(pL);
+            const pR = new THREE.Mesh(panelGeo, panelMat); pR.position.x = 0.55; g.add(pR);
+
+            // Antenna
+            const ant = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.015, 0.015, 0.6, 8),
+                new THREE.MeshStandardMaterial({ color: 0xd1d5db, metalness: 0.9 })
+            );
+            ant.position.set(0.3, 1.45, 0);
+            g.add(ant);
+
+            return g;
+        }
+
+        let modelLoaded = false;
+        const loader = new GLTFLoader();
+
+        function setupModel(model) {
+            // Scale to ~2.27 units along largest axis, THEN center
+            const box = new THREE.Box3().setFromObject(model);
+            const size = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z);
+            const scale = 2.27 / maxDim;
+            model.scale.setScalar(scale);
+
+            // Rotate so the interior/open side faces the camera initially
+            // and the CubeSat stands upright (vertical)
+            model.rotation.y = Math.PI;
+            model.rotation.x = Math.PI / 2;
+
+            // Recompute bounding box after scaling so centering is accurate
+            model.updateMatrixWorld(true);
+            const scaledBox = new THREE.Box3().setFromObject(model);
+            const scaledCenter = scaledBox.getCenter(new THREE.Vector3());
+            model.position.sub(scaledCenter);
+
+            model.traverse(c => {
+                if (c.isMesh && c.material) {
+                    const mats = Array.isArray(c.material) ? c.material : [c.material];
+                    mats.forEach(m => {
+                        // Assign the environment map so metallic surfaces reflect
+                        m.envMap = envMap;
+                        m.envMapIntensity = 2.5;
+                        // Reduce metalness significantly to let diffuse lighting work
+                        if (m.metalness !== undefined) m.metalness = Math.min(m.metalness, 0.4);
+                        // Increase roughness to spread reflections wider
+                        if (m.roughness !== undefined) m.roughness = Math.max(m.roughness, 0.45);
+                        // Derive emissive from the material's own color for visibility
+                        const baseColor = m.color ? m.color.clone() : new THREE.Color(0x666666);
+                        m.emissive = baseColor.clone().multiplyScalar(0.15);
+                        m.emissiveIntensity = 1.0;
+                        m.needsUpdate = true;
+                    });
+                }
+            });
+            cubesatGroup.add(model);
+            modelLoaded = true;
+        }
+
+        // Try compressed glb first, then fallback gracefully
+        loader.load(
+            'cubesat-light.glb',
+            (gltf) => setupModel(gltf.scene),
+            undefined,
+            () => {
+                // Try alternate filename
+                loader.load(
+                    '2U_CUBESAT_DP_DAUST-compressed.gltf',
+                    (gltf) => setupModel(gltf.scene),
+                    undefined,
+                    () => {
+                        console.warn('No GLTF model found — using procedural fallback.');
+                        cubesatGroup.add(createFallbackCubesat());
+                        modelLoaded = true;
+                    }
+                );
+            }
+        );
+
+        // ============================================================
+        // COMPONENT MARKERS
+        // ============================================================
+        const markers = {};
+        function createMarker(def) {
+            const g = new THREE.Group();
+            g.position.set(...def.offset);
+
+            const core = new THREE.Mesh(
+                new THREE.SphereGeometry(0.04, 16, 16),
+                new THREE.MeshBasicMaterial({ color: def.color })
+            );
+            g.add(core);
+
+            const halo = new THREE.Mesh(
+                new THREE.SphereGeometry(0.09, 16, 16),
+                new THREE.MeshBasicMaterial({ color: def.color, transparent: true, opacity: 0 })
+            );
+            g.add(halo);
+
+            const ring = new THREE.Mesh(
+                new THREE.RingGeometry(0.13, 0.14, 32),
+                new THREE.MeshBasicMaterial({ color: def.color, transparent: true, opacity: 0, side: THREE.DoubleSide })
+            );
+            ring.rotation.x = -Math.PI / 2;
+            g.add(ring);
+
+            cubesatGroup.add(g);
+            return { group: g, core, halo, ring };
+        }
+        for (const [k, def] of Object.entries(COMPONENTS)) {
+            markers[k] = createMarker(def);
+        }
+
+        // DOM labels (better text rendering than canvas labels)
+        const labelEls = {};
+        for (const [k, def] of Object.entries(COMPONENTS)) {
+            const el = document.createElement('div');
+            el.className = 'component-label';
+            el.textContent = def.label;
+            const hex = '#' + def.color.toString(16).padStart(6, '0');
+            el.style.color = hex;
+            el.style.borderColor = hex + '60';
+            document.body.appendChild(el);
+            labelEls[k] = el;
+        }
+
+        // ============================================================
+        // DATA FLOW (animated lines + traveling packets)
+        // ============================================================
+        const flowGroup = new THREE.Group();
+        cubesatGroup.add(flowGroup);
+
+        const MAX_FLOWS = 6;
+        const flowLines = [];
+        for (let i = 0; i < MAX_FLOWS; i++) {
+            const g = new THREE.BufferGeometry();
+            g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+            const m = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 });
+            const line = new THREE.Line(g, m);
+            flowGroup.add(line);
+            flowLines.push({ line, geo: g, mat: m });
+        }
+
+        const PACKET_COUNT = 24;
+        const packetPool = [];
+        for (let i = 0; i < PACKET_COUNT; i++) {
+            const m = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 });
+            const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.025, 8, 8), m);
+            flowGroup.add(mesh);
+            packetPool.push({ mesh, mat: m });
+        }
+
+        // ============================================================
+        // GROUND LINK (LoRa downlink to ground station)
+        // ============================================================
+        const groundGroup = new THREE.Group();
+        scene.add(groundGroup);
+        groundGroup.visible = false;
+
+        const gsBaseGeo = new THREE.CylinderGeometry(0.4, 0.5, 0.15, 24);
+        const gsBase = new THREE.Mesh(gsBaseGeo, new THREE.MeshStandardMaterial({
+            color: 0x14b8a6, emissive: 0x14b8a6, emissiveIntensity: 0.4
+        }));
+        gsBase.position.set(0, -7.6, 0);
+        groundGroup.add(gsBase);
+
+        const gsAntGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.6, 8);
+        const gsAnt = new THREE.Mesh(gsAntGeo, new THREE.MeshStandardMaterial({ color: 0xd1d5db }));
+        gsAnt.position.set(0, -7.2, 0);
+        groundGroup.add(gsAnt);
+
+        // Beam: curve from satellite (LoRa) to ground station
+        const BEAM_SEGS = 60;
+        const beamGeo = new THREE.BufferGeometry();
+        beamGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(BEAM_SEGS * 3), 3));
+        const beamMat = new THREE.LineBasicMaterial({ color: 0xf59e0b, transparent: true, opacity: 0 });
+        groundGroup.add(new THREE.Line(beamGeo, beamMat));
+
+        // Pulse rings on ground
+        const gsRings = [];
+        for (let i = 0; i < 3; i++) {
+            const m = new THREE.MeshBasicMaterial({ color: 0x14b8a6, transparent: true, opacity: 0, side: THREE.DoubleSide });
+            const ring = new THREE.Mesh(new THREE.RingGeometry(0.4, 0.42, 48), m);
+            ring.position.set(0, -7.5, 0);
+            ring.rotation.x = -Math.PI / 2;
+            groundGroup.add(ring);
+            gsRings.push({ ring, mat: m, phase: i * 0.33 });
+        }
+
+        // ============================================================
+        // STATE
+        // ============================================================
+        const state = {
+            currentScene: 0,
+            sceneTime: 0,
+            totalTime: 0,
+            paused: false,
+            satRotationSpeed: 0.18,
+            satDrift: 0.5,
+            satOffset: new THREE.Vector3(),
+            activeComponents: new Set(),
+            dataFlows: [],
+            showGroundLink: false
+        };
+
+        function enterScene(idx) {
+            if (idx >= scenes.length) {
+                // Loop: full reset
+                state.totalTime = 0;
+                state.satOffset.set(0, 0, 0);
+                state.activeComponents.clear();
+                state.dataFlows = [];
+                state.showGroundLink = false;
+                idx = 0;
+            }
+            state.currentScene = idx;
+            state.sceneTime = 0;
+            const sc = scenes[idx];
+            if (sc.onEnter) sc.onEnter(state);
+
+            const titleEl = document.getElementById('scene-title');
+            const subEl = document.getElementById('subtitle');
+            titleEl.classList.remove('visible');
+            subEl.classList.remove('visible');
+            setTimeout(() => {
+                titleEl.textContent = sc.id;
+                subEl.textContent = sc.subtitle;
+                titleEl.classList.add('visible');
+                subEl.classList.add('visible');
+            }, 280);
+
+            groundGroup.visible = state.showGroundLink;
+        }
+
+        // Build progress segment ticks
+        const segContainer = document.getElementById('progress-segments');
+        scenes.forEach(sc => {
+            const t = document.createElement('div');
+            t.className = 'segment-tick';
+            t.style.flexGrow = sc.duration;
+            segContainer.appendChild(t);
+        });
+
+        // ============================================================
+        // ANIMATION LOOP
+        // ============================================================
+        const clock = new THREE.Clock();
+        let initialized = false;
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const dt = clock.getDelta();
+
+            if (!modelLoaded) {
+                renderer.render(scene, camera);
+                return;
+            }
+
+            // First frame after load
+            if (!initialized) {
+                initialized = true;
+                enterScene(0);
+                setTimeout(() => document.getElementById('loading').classList.add('hidden'), 400);
+                document.getElementById('hint').classList.add('visible');
+                setTimeout(() => document.getElementById('hint').classList.remove('visible'), 5000);
+            }
+
+            if (!state.paused) {
+                state.sceneTime += dt;
+                state.totalTime += dt;
+                const sc = scenes[state.currentScene];
+                if (state.sceneTime >= sc.duration) enterScene(state.currentScene + 1);
+            }
+
+            // Camera transition (ease through scene + smooth lerp)
+            const sc = scenes[state.currentScene];
+            const t = Math.min(state.sceneTime / sc.duration, 1);
+            const e = easeInOutCubic(t);
+            const tp = lerpVec(sc.cameraStart.pos, sc.cameraEnd.pos, e);
+            const tl = lerpVec(sc.cameraStart.look, sc.cameraEnd.look, e);
+            camera.position.lerp(new THREE.Vector3(...tp), 0.085);
+            camera.lookAt(new THREE.Vector3(...tl));
+
+            // CubeSat motion
+            cubesatGroup.rotation.y += state.satRotationSpeed * dt;
+            cubesatGroup.rotation.x = Math.sin(state.totalTime * 0.3) * 0.04;
+            if (state.satDrift !== 0) {
+                state.satOffset.x += state.satDrift * dt * 0.25;
+                state.satDrift *= 0.94;
+            }
+            cubesatGroup.position.copy(state.satOffset);
+
+            // Component markers
+            for (const [k, m] of Object.entries(markers)) {
+                const active = state.activeComponents.has(k);
+
+                m.halo.material.opacity = THREE.MathUtils.lerp(m.halo.material.opacity, active ? 0.45 : 0, 0.1);
+                m.halo.scale.setScalar(1 + Math.sin(state.totalTime * 3) * 0.18 * (active ? 1 : 0));
+
+                const ringT = (state.totalTime * 0.7) % 1;
+                m.ring.material.opacity = active ? (1 - ringT) * 0.55 : 0;
+                m.ring.scale.setScalar(1 + ringT * 1.6);
+
+                m.core.scale.setScalar(active ? (1 + Math.sin(state.totalTime * 4) * 0.22) : 1);
+            }
+
+            // Data flows
+            // Reset
+            flowLines.forEach(f => f.mat.opacity = 0);
+            packetPool.forEach(p => p.mat.opacity = 0);
+
+            let li = 0, pi = 0;
+            for (const flow of state.dataFlows) {
+                const a = markers[flow.from].group.position;
+                const b = markers[flow.to].group.position;
+
+                if (li < flowLines.length) {
+                    const fl = flowLines[li++];
+                    const pos = fl.geo.attributes.position.array;
+                    pos[0] = a.x; pos[1] = a.y; pos[2] = a.z;
+                    pos[3] = b.x; pos[4] = b.y; pos[5] = b.z;
+                    fl.geo.attributes.position.needsUpdate = true;
+                    fl.mat.color.setHex(flow.color);
+                    fl.mat.opacity = 0.45;
+                }
+
+                flow.t += dt * 0.55;
+                for (let p = 0; p < 3; p++) {
+                    if (pi >= packetPool.length) break;
+                    const packet = packetPool[pi++];
+                    const phase = (flow.t + p * 0.33) % 1;
+                    packet.mesh.position.lerpVectors(a, b, phase);
+                    packet.mat.color.setHex(flow.color);
+                    packet.mat.opacity = Math.sin(phase * Math.PI) * 0.95;
+                    packet.mesh.scale.setScalar(1 + Math.sin(phase * Math.PI) * 0.6);
+                }
+            }
+
+            // Ground link
+            if (state.showGroundLink) {
+                const loraPos = new THREE.Vector3();
+                markers.LORA.group.getWorldPosition(loraPos);
+                const gsPos = gsBase.position;
+
+                const arr = beamGeo.attributes.position.array;
+                for (let i = 0; i < BEAM_SEGS; i++) {
+                    const tt = i / (BEAM_SEGS - 1);
+                    arr[i * 3] = THREE.MathUtils.lerp(loraPos.x, gsPos.x, tt);
+                    arr[i * 3 + 1] = THREE.MathUtils.lerp(loraPos.y, gsPos.y, tt) + Math.sin(tt * Math.PI) * 0.4;
+                    arr[i * 3 + 2] = THREE.MathUtils.lerp(loraPos.z, gsPos.z, tt);
+                }
+                beamGeo.attributes.position.needsUpdate = true;
+                beamMat.opacity = 0.6 + Math.sin(state.totalTime * 4) * 0.25;
+
+                gsRings.forEach((r) => {
+                    const phase = (state.totalTime * 0.55 + r.phase) % 1;
+                    r.ring.scale.setScalar(0.3 + phase * 4.5);
+                    r.mat.opacity = (1 - phase) * 0.55;
+                });
+            }
+
+            // Background motion
+            stars.rotation.y += 0.00015;
+            earth.rotation.y += 0.005 * dt;
+
+            // DOM labels
+            updateLabels();
+            // Progress UI
+            updateProgress();
+
+            renderer.render(scene, camera);
+        }
+
+        // ============================================================
+        // LABEL POSITIONING (3D → screen space)
+        // ============================================================
+        const tmpVec = new THREE.Vector3();
+        function updateLabels() {
+            for (const [k, m] of Object.entries(markers)) {
+                const el = labelEls[k];
+                if (!state.activeComponents.has(k)) {
+                    el.classList.remove('visible');
+                    continue;
+                }
+                m.group.getWorldPosition(tmpVec);
+                tmpVec.project(camera);
+                if (tmpVec.z > 1) { el.classList.remove('visible'); continue; }
+                const x = (tmpVec.x * 0.5 + 0.5) * innerWidth;
+                const y = (-tmpVec.y * 0.5 + 0.5) * innerHeight;
+                el.style.left = x + 'px';
+                el.style.top = (y - 30) + 'px';
+                el.classList.add('visible');
+            }
+        }
+
+        // ============================================================
+        // PROGRESS
+        // ============================================================
+        const progressBar = document.getElementById('progress-bar');
+        const timeDisplay = document.getElementById('time-display');
+        function updateProgress() {
+            let elapsed = 0;
+            for (let i = 0; i < state.currentScene; i++) elapsed += scenes[i].duration;
+            elapsed += state.sceneTime;
+            const pct = Math.min(elapsed / totalDuration, 1) * 100;
+            progressBar.style.width = pct + '%';
+            timeDisplay.innerHTML = `<span class="current">${fmt(elapsed)}</span> / ${fmt(totalDuration)}`;
+        }
+        function fmt(s) {
+            const m = Math.floor(s / 60), x = Math.floor(s % 60);
+            return String(m).padStart(2, '0') + ':' + String(x).padStart(2, '0');
+        }
+
+        // ============================================================
+        // UTILITIES
+        // ============================================================
+        function lerpVec(a, b, t) {
+            return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+        }
+        function easeInOutCubic(t) {
+            return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        }
+
+        // ============================================================
+        // CONTROLS
+        // ============================================================
+        const btnPause = document.getElementById('btn-pause');
+        const btnRestart = document.getElementById('btn-restart');
+        btnPause.addEventListener('click', () => {
+            state.paused = !state.paused;
+            btnPause.textContent = state.paused ? '▶' : '⏸';
+        });
+        btnRestart.addEventListener('click', () => {
+            state.totalTime = 0;
+            state.satOffset.set(0, 0, 0);
+            state.activeComponents.clear();
+            state.dataFlows = [];
+            state.showGroundLink = false;
+            enterScene(0);
+        });
+
+        document.addEventListener('keydown', e => {
+            if (e.code === 'Space') { e.preventDefault(); btnPause.click(); }
+            else if (e.code === 'KeyR') btnRestart.click();
+            else if (e.code === 'ArrowRight') enterScene(state.currentScene + 1);
+            else if (e.code === 'ArrowLeft' && state.currentScene > 0) enterScene(state.currentScene - 1);
+        });
+
+        addEventListener('resize', () => {
+            camera.aspect = innerWidth / innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(innerWidth, innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+
+</html>

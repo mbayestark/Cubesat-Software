@@ -1,0 +1,140 @@
+{
+  "asset": {
+    "generator": "glTF-Transform v4.2.1",
+    "version": "2.0"
+  },
+  "accessors": [
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 6500711,
+      "max": [
+        0.4366893470287323,
+        0.42570269107818604,
+        1
+      ],
+      "min": [
+        -0.4366893470287323,
+        -0.42570269107818604,
+        -1
+      ],
+      "bufferView": 0,
+      "byteOffset": 0
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 6500711,
+      "bufferView": 0,
+      "byteOffset": 12
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5121,
+      "count": 6500711,
+      "normalized": true,
+      "bufferView": 0,
+      "byteOffset": 24
+    },
+    {
+      "type": "SCALAR",
+      "componentType": 5125,
+      "count": 7245996,
+      "bufferView": 1,
+      "byteOffset": 0
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 182019908,
+      "byteStride": 28,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 182019908,
+      "byteLength": 28983984,
+      "target": 34963
+    }
+  ],
+  "buffers": [
+    {
+      "uri": "buffer.bin",
+      "byteLength": 211003892
+    }
+  ],
+  "materials": [
+    {
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          0.6038273388475408,
+          0.6038273388475408,
+          0.6038273388475408,
+          1
+        ],
+        "metallicFactor": 0
+      }
+    }
+  ],
+  "meshes": [
+    {
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0,
+            "NORMAL": 1,
+            "COLOR_0": 2
+          },
+          "mode": 4,
+          "material": 0,
+          "indices": 3
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "empty_2",
+      "extras": {
+        "name": "empty_2"
+      },
+      "translation": [
+        5.095195770263672,
+        1.4500007629394531,
+        -14.417980194091797
+      ],
+      "scale": [
+        127.41801834106445,
+        127.41801834106445,
+        127.41801834106445
+      ],
+      "mesh": 0
+    },
+    {
+      "name": "empty_1",
+      "extras": {
+        "name": "empty_1"
+      },
+      "children": [
+        0
+      ]
+    },
+    {
+      "name": "AuxScene",
+      "children": [
+        1
+      ]
+    }
+  ],
+  "scenes": [
+    {
+      "name": "AuxScene",
+      "nodes": [
+        2
+      ]
+    }
+  ],
+  "scene": 0
+}
