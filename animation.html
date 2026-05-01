@@ -399,6 +399,27 @@
             right: 8px;
             transform: scale(-1, -1);
         }
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            #controls { 
+                bottom: 20px; 
+                padding: 8px 16px; 
+                gap: 12px;
+                transform: translateX(-50%) scale(0.9);
+            }
+            #hint { font-size: 9px; bottom: 75px; }
+            .marker-label { font-size: 9px; padding: 4px 8px; }
+            .loading-text { font-size: 24px; }
+        }
+
+        /* Loop cross-fade */
+        #loop-fade {
+            position: fixed; inset: 0; z-index: 50;
+            background: #000; opacity: 0;
+            pointer-events: none;
+            transition: opacity 1.2s ease;
+        }
+        #loop-fade.active { opacity: 1; }
     </style>
 </head>
 
@@ -432,6 +453,7 @@
 
     <div id="hint">SPACE · PAUSE ←/→ · SCENE R · RESTART</div>
 
+    <div id="loop-fade"></div>
     <div id="loading">
         <div class="loading-text">SAT-2U-001</div>
         <div class="loading-bar"></div>
@@ -450,6 +472,7 @@
     <script type="module">
         import * as THREE from 'three';
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
         // ============================================================
         // STORYBOARD — each scene tied to the pitch script
@@ -483,7 +506,7 @@
             },
             {
                 id: '03 / OBC ONLINE',
-                subtitle: 'STM32 F446RE — the real-time controller awakens',
+                subtitle: 'C3 Card — the command & control computer awakens',
                 duration: 6,
                 cameraStart: { pos: [2.4, 1.6, 3.6], look: [0, 0, 0] },
                 cameraEnd: { pos: [1.6, 0.4, 2.4], look: [0.2, -0.4, 0] },
@@ -494,7 +517,7 @@
             },
             {
                 id: '04 / DATA HANDLING',
-                subtitle: 'CAN bus link · STM32 ⇄ BeagleBone Black',
+                subtitle: 'CAN bus link · C3 Card ⇄ CFC Octavo',
                 duration: 9,
                 cameraStart: { pos: [1.6, 0.4, 2.4], look: [0.2, -0.4, 0] },
                 cameraEnd: { pos: [1.0, 0.1, 2.1], look: [0, -0.4, 0] },
@@ -507,7 +530,7 @@
             },
             {
                 id: '05 / TELEMETRY',
-                subtitle: 'Sensors stream data · MicroSD persistence · DHT11 environmental',
+                subtitle: 'Sensors stream data · ADACS attitude · environmental telemetry',
                 duration: 8,
                 cameraStart: { pos: [1.0, 0.1, 2.1], look: [0, -0.4, 0] },
                 cameraEnd: { pos: [-1.6, 0.7, 2.4], look: [0, 0, 0] },
@@ -521,7 +544,7 @@
             },
             {
                 id: '06 / GROUND LINK',
-                subtitle: 'LoRa downlink · 10-minute pass over Dakar',
+                subtitle: 'UHF downlink · 10-minute pass over Dakar',
                 duration: 9,
                 cameraStart: { pos: [-1.6, 0.7, 2.4], look: [0, 0, 0] },
                 cameraEnd: { pos: [4.5, 3.5, 7.5], look: [0, -2.5, 0] },
@@ -552,13 +575,13 @@
         // (independent of GLTF mesh names; works with any model)
         // ============================================================
         const COMPONENTS = {
-            STM32: { offset: [0.18, -0.55, 0.05], color: 0x3b82f6, label: 'STM32 F446RE · OBC' },
-            BBB: { offset: [-0.18, -0.18, 0.05], color: 0x10b981, label: 'BEAGLEBONE BLACK · PAYLOAD' },
-            LORA: { offset: [0.15, 0.65, 0.05], color: 0xf59e0b, label: 'LORA RYLR890 · 915MHz' },
-            NRF: { offset: [-0.15, 0.40, 0.05], color: 0xa855f7, label: 'NRF24L01 · 2.4GHZ' },
-            DHT11: { offset: [0.28, 0.15, 0.20], color: 0x06b6d4, label: 'DHT11 · TEMP/HUMIDITY' },
-            SD: { offset: [-0.25, -0.70, 0.20], color: 0xa3a3a3, label: 'MICROSD · STORAGE' },
-            EPS: { offset: [0.30, 0.00, -0.10], color: 0xfbbf24, label: 'EPS · POWER' }
+            STM32: { offset: [0.15, 0.68, -0.12], color: 0x3b82f6, label: 'C3 CARD · OBC' },
+            BBB: { offset: [-0.15, -0.65, 0.10], color: 0x10b981, label: 'CFC OCTAVO · PAYLOAD' },
+            LORA: { offset: [0.05, -0.99, 0.08], color: 0xf59e0b, label: 'HELICAL ANTENNA · UHF' },
+            NRF: { offset: [-0.18, -0.83, -0.10], color: 0xa855f7, label: 'GPS CARD · NAV' },
+            DHT11: { offset: [-0.10, 0.12, 0.05], color: 0x06b6d4, label: 'ADACS CARD · SENSORS' },
+            SD: { offset: [0.08, 0.81, -0.06], color: 0xa3a3a3, label: '+Z ENDCAP · I/O' },
+            EPS: { offset: [0.15, 0.20, 0.05], color: 0xfbbf24, label: 'MAGNETORQUER · ADCS' }
         };
 
         // ============================================================
@@ -636,53 +659,104 @@
         backLight.position.set(-3, 1, -4);
         scene.add(backLight);
 
+        const loader = new GLTFLoader();
+        const dracoLoader = new DRACOLoader();
+        dracoLoader.setDecoderPath('https://unpkg.com/three@0.160.0/examples/jsm/libs/draco/');
+        loader.setDRACOLoader(dracoLoader);
+        const texLoader = new THREE.TextureLoader();
+
         // ============================================================
-        // STARFIELD
+        // STARFIELD (Enhanced)
         // ============================================================
         function createStars() {
             const g = new THREE.BufferGeometry();
-            const n = 3000;
+            const n = 4000;
             const pos = new Float32Array(n * 3);
+            const colors = new Float32Array(n * 3);
+            const sizes = new Float32Array(n);
+
             for (let i = 0; i < n; i++) {
-                const r = 90 + Math.random() * 50;
+                const r = 100 + Math.random() * 60;
                 const theta = Math.random() * Math.PI * 2;
                 const phi = Math.acos(2 * Math.random() - 1);
+                
                 pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
                 pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
                 pos[i * 3 + 2] = r * Math.cos(phi);
+
+                // Add subtle star colors (white, slight blue, slight yellow)
+                const type = Math.random();
+                if (type > 0.9) { // Blueish
+                    colors[i * 3] = 0.7; colors[i * 3 + 1] = 0.8; colors[i * 3 + 2] = 1.0;
+                } else if (type > 0.8) { // Yellowish
+                    colors[i * 3] = 1.0; colors[i * 3 + 1] = 0.9; colors[i * 3 + 2] = 0.7;
+                } else { // White
+                    colors[i * 3] = 1.0; colors[i * 3 + 1] = 1.0; colors[i * 3 + 2] = 1.0;
+                }
+
+                sizes[i] = Math.random() * 0.15 + 0.02;
             }
+
             g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+            g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            
             const m = new THREE.PointsMaterial({
-                color: 0xffffff, size: 0.09,
-                sizeAttenuation: true, transparent: true, opacity: 0.85
+                size: 0.12,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.8,
+                sizeAttenuation: true
             });
             return new THREE.Points(g, m);
         }
         const stars = createStars();
         scene.add(stars);
 
-        // Distant Earth (visible in wide shots)
+        // ============================================================
+        // EARTH (Realistic with Clouds & Atmosphere)
+        // ============================================================
+        const earthGroup = new THREE.Group();
+        earthGroup.position.set(0, -24, -8);
+        scene.add(earthGroup);
+
+        let earthMesh, cloudMesh;
+
         function createEarth() {
+            // Earth surface
             const g = new THREE.SphereGeometry(16, 64, 64);
             const m = new THREE.MeshStandardMaterial({
-                color: 0x1e3a5f,
-                emissive: 0x0a1f3a,
-                emissiveIntensity: 0.25,
-                roughness: 0.85, metalness: 0.1
+                map: texLoader.load('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg'),
+                bumpMap: texLoader.load('https://unpkg.com/three-globe/example/img/earth-topology.png'),
+                bumpScale: 0.15,
+                metalness: 0.1,
+                roughness: 0.7
             });
-            const earth = new THREE.Mesh(g, m);
-            earth.position.set(0, -24, -8);
+            earthMesh = new THREE.Mesh(g, m);
+            earthGroup.add(earthMesh);
 
-            // Atmosphere halo
+            // Cloud Layer
+            const cg = new THREE.SphereGeometry(16.3, 64, 64);
+            const cm = new THREE.MeshStandardMaterial({
+                map: texLoader.load('https://unpkg.com/three-globe/example/img/earth-clouds.png'),
+                transparent: true,
+                opacity: 0.4,
+                blending: THREE.AdditiveBlending
+            });
+            cloudMesh = new THREE.Mesh(cg, cm);
+            earthGroup.add(cloudMesh);
+
+            // Atmosphere Halo (Improved Fresnel-like)
             const ag = new THREE.SphereGeometry(16.5, 64, 64);
             const am = new THREE.MeshBasicMaterial({
-                color: 0x4a90e2, transparent: true, opacity: 0.1, side: THREE.BackSide
+                color: 0x4a90e2,
+                transparent: true,
+                opacity: 0.15,
+                side: THREE.BackSide
             });
-            earth.add(new THREE.Mesh(ag, am));
-            return earth;
+            const atmosphere = new THREE.Mesh(ag, am);
+            earthGroup.add(atmosphere);
         }
-        const earth = createEarth();
-        scene.add(earth);
+        createEarth();
 
         // ============================================================
         // CUBESAT — load GLTF, fall back to procedural geometry
@@ -727,22 +801,27 @@
         }
 
         let modelLoaded = false;
-        const loader = new GLTFLoader();
 
         function setupModel(model) {
-            // Scale to ~2.27 units along largest axis, THEN center
             const box = new THREE.Box3().setFromObject(model);
             const size = box.getSize(new THREE.Vector3());
             const maxDim = Math.max(size.x, size.y, size.z);
             const scale = 2.27 / maxDim;
             model.scale.setScalar(scale);
 
-            // Rotate so the interior/open side faces the camera initially
-            // and the CubeSat stands upright (vertical)
-            model.rotation.y = Math.PI;
-            model.rotation.x = Math.PI / 2;
+            // Auto-orient: put the longest axis vertical (Y-up)
+            const dims = [
+                { axis: 'x', val: size.x },
+                { axis: 'y', val: size.y },
+                { axis: 'z', val: size.z }
+            ].sort((a, b) => b.val - a.val);
+            const longest = dims[0].axis;
+            if (longest === 'x') {
+                model.rotation.z = Math.PI / 2;
+            } else if (longest === 'z') {
+                model.rotation.x = -Math.PI / 2;
+            }
 
-            // Recompute bounding box after scaling so centering is accurate
             model.updateMatrixWorld(true);
             const scaledBox = new THREE.Box3().setFromObject(model);
             const scaledCenter = scaledBox.getCenter(new THREE.Vector3());
@@ -752,14 +831,10 @@
                 if (c.isMesh && c.material) {
                     const mats = Array.isArray(c.material) ? c.material : [c.material];
                     mats.forEach(m => {
-                        // Assign the environment map so metallic surfaces reflect
                         m.envMap = envMap;
                         m.envMapIntensity = 2.5;
-                        // Reduce metalness significantly to let diffuse lighting work
                         if (m.metalness !== undefined) m.metalness = Math.min(m.metalness, 0.4);
-                        // Increase roughness to spread reflections wider
                         if (m.roughness !== undefined) m.roughness = Math.max(m.roughness, 0.45);
-                        // Derive emissive from the material's own color for visibility
                         const baseColor = m.color ? m.color.clone() : new THREE.Color(0x666666);
                         m.emissive = baseColor.clone().multiplyScalar(0.15);
                         m.emissiveIntensity = 1.0;
@@ -771,23 +846,16 @@
             modelLoaded = true;
         }
 
-        // Try compressed glb first, then fallback gracefully
         loader.load(
-            'cubesat-light.glb',
+            'Oresat0.5_noPlanes.glb',
             (gltf) => setupModel(gltf.scene),
-            undefined,
-            () => {
-                // Try alternate filename
-                loader.load(
-                    '2U_CUBESAT_DP_DAUST-compressed.gltf',
-                    (gltf) => setupModel(gltf.scene),
-                    undefined,
-                    () => {
-                        console.warn('No GLTF model found — using procedural fallback.');
-                        cubesatGroup.add(createFallbackCubesat());
-                        modelLoaded = true;
-                    }
-                );
+            (progress) => {
+                if (progress.total) console.log(`Loading: ${(progress.loaded/progress.total*100).toFixed(0)}%`);
+            },
+            (err) => {
+                console.warn('GLB load failed:', err, '— using procedural fallback.');
+                cubesatGroup.add(createFallbackCubesat());
+                modelLoaded = true;
             }
         );
 
@@ -795,6 +863,14 @@
         // COMPONENT MARKERS
         // ============================================================
         const markers = {};
+
+        function createBracketLine(color) {
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(16 * 3), 3));
+            const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0 });
+            return { line: new THREE.LineSegments(geo, mat), geo, mat };
+        }
+
         function createMarker(def) {
             const g = new THREE.Group();
             g.position.set(...def.offset);
@@ -818,8 +894,20 @@
             ring.rotation.x = -Math.PI / 2;
             g.add(ring);
 
+            // Targeting bracket (4 corner lines in 3D)
+            const bracket = createBracketLine(def.color);
+            g.add(bracket.line);
+
+            // Scanline (horizontal sweep plane)
+            const scanGeo = new THREE.PlaneGeometry(0.36, 0.005);
+            const scanMat = new THREE.MeshBasicMaterial({
+                color: def.color, transparent: true, opacity: 0, side: THREE.DoubleSide
+            });
+            const scanline = new THREE.Mesh(scanGeo, scanMat);
+            g.add(scanline);
+
             cubesatGroup.add(g);
-            return { group: g, core, halo, ring };
+            return { group: g, core, halo, ring, bracket, scanline, scanMat, activateTime: -1, wasActive: false, labelReady: false };
         }
         for (const [k, def] of Object.entries(COMPONENTS)) {
             markers[k] = createMarker(def);
@@ -917,16 +1005,28 @@
             showGroundLink: false
         };
 
+        const fadeEl = document.getElementById('loop-fade');
         function enterScene(idx) {
             if (idx >= scenes.length) {
-                // Loop: full reset
-                state.totalTime = 0;
-                state.satOffset.set(0, 0, 0);
-                state.activeComponents.clear();
-                state.dataFlows = [];
-                state.showGroundLink = false;
-                idx = 0;
+                // Fade to black, reset, then fade back in
+                fadeEl.classList.add('active');
+                state.paused = true;
+                setTimeout(() => {
+                    state.satOffset.set(0, 0, 0);
+                    state.satDrift = 0;
+                    state.activeComponents.clear();
+                    state.dataFlows = [];
+                    state.showGroundLink = false;
+                    groundGroup.visible = false;
+                    doEnterScene(0);
+                    state.paused = false;
+                    setTimeout(() => fadeEl.classList.remove('active'), 100);
+                }, 1300);
+                return;
             }
+            doEnterScene(idx);
+        }
+        function doEnterScene(idx) {
             state.currentScene = idx;
             state.sceneTime = 0;
             const sc = scenes[idx];
@@ -959,6 +1059,8 @@
         // ANIMATION LOOP
         // ============================================================
         const clock = new THREE.Clock();
+        const _camTarget = new THREE.Vector3();
+        const _loraWorld = new THREE.Vector3();
         let initialized = false;
 
         function animate() {
@@ -982,6 +1084,7 @@
             if (!state.paused) {
                 state.sceneTime += dt;
                 state.totalTime += dt;
+                if (state.totalTime > 3600) state.totalTime -= 3600;
                 const sc = scenes[state.currentScene];
                 if (state.sceneTime >= sc.duration) enterScene(state.currentScene + 1);
             }
@@ -992,8 +1095,10 @@
             const e = easeInOutCubic(t);
             const tp = lerpVec(sc.cameraStart.pos, sc.cameraEnd.pos, e);
             const tl = lerpVec(sc.cameraStart.look, sc.cameraEnd.look, e);
-            camera.position.lerp(new THREE.Vector3(...tp), 0.085);
-            camera.lookAt(new THREE.Vector3(...tl));
+            _camTarget.set(tp[0], tp[1], tp[2]);
+            camera.position.lerp(_camTarget, 0.085);
+            _camTarget.set(tl[0], tl[1], tl[2]);
+            camera.lookAt(_camTarget);
 
             // CubeSat motion
             cubesatGroup.rotation.y += state.satRotationSpeed * dt;
@@ -1004,18 +1109,66 @@
             }
             cubesatGroup.position.copy(state.satOffset);
 
-            // Component markers
+            // Component markers + targeting bracket animation
             for (const [k, m] of Object.entries(markers)) {
                 const active = state.activeComponents.has(k);
 
-                m.halo.material.opacity = THREE.MathUtils.lerp(m.halo.material.opacity, active ? 0.45 : 0, 0.1);
-                m.halo.scale.setScalar(1 + Math.sin(state.totalTime * 3) * 0.18 * (active ? 1 : 0));
+                // Track activation moment
+                if (active && !m.wasActive) {
+                    m.activateTime = state.totalTime;
+                    m.wasActive = true;
+                } else if (!active) {
+                    m.wasActive = false;
+                    m.activateTime = -1;
+                }
+
+                const timeSinceActivate = m.activateTime >= 0 ? state.totalTime - m.activateTime : 99;
+                const BRACKET_DUR = 0.6;
+                const SCAN_DUR = 0.4;
+                const bracketProgress = active ? Math.min(timeSinceActivate / BRACKET_DUR, 1) : 0;
+                const scanProgress = active ? Math.max(0, Math.min((timeSinceActivate - 0.1) / SCAN_DUR, 1)) : 0;
+                const labelReady = timeSinceActivate > BRACKET_DUR + 0.15;
+
+                // Targeting bracket: 4 corners drawing in
+                const S = 0.18;
+                const L = 0.07 * bracketProgress;
+                const bArr = m.bracket.geo.attributes.position.array;
+                let vi = 0;
+                const corners = [[-1,-1],[-1,1],[1,1],[1,-1]];
+                for (const [cx, cy] of corners) {
+                    bArr[vi++] = cx*S - cx*L; bArr[vi++] = cy*S; bArr[vi++] = 0;
+                    bArr[vi++] = cx*S;         bArr[vi++] = cy*S; bArr[vi++] = 0;
+                    bArr[vi++] = cx*S;         bArr[vi++] = cy*S; bArr[vi++] = 0;
+                    bArr[vi++] = cx*S;         bArr[vi++] = cy*S - cy*L; bArr[vi++] = 0;
+                }
+                m.bracket.geo.setDrawRange(0, vi / 3);
+                m.bracket.geo.attributes.position.needsUpdate = true;
+                m.bracket.mat.opacity = active ? bracketProgress * 0.8 : 0;
+                m.bracket.line.lookAt(camera.position);
+
+                // Scanline sweep (top to bottom)
+                if (active && scanProgress > 0 && scanProgress < 1) {
+                    const yPos = S - scanProgress * S * 2;
+                    m.scanMat.opacity = (1 - scanProgress) * 0.7;
+                    m.scanline.position.set(0, yPos, 0);
+                    m.scanline.quaternion.copy(m.bracket.line.quaternion);
+                } else {
+                    m.scanMat.opacity = 0;
+                }
+
+                // Existing marker effects (delayed until bracket finishes)
+                const markerActive = active && labelReady;
+                m.halo.material.opacity = THREE.MathUtils.lerp(m.halo.material.opacity, markerActive ? 0.45 : 0, 0.1);
+                m.halo.scale.setScalar(1 + Math.sin(state.totalTime * 3) * 0.18 * (markerActive ? 1 : 0));
 
                 const ringT = (state.totalTime * 0.7) % 1;
-                m.ring.material.opacity = active ? (1 - ringT) * 0.55 : 0;
+                m.ring.material.opacity = markerActive ? (1 - ringT) * 0.55 : 0;
                 m.ring.scale.setScalar(1 + ringT * 1.6);
 
                 m.core.scale.setScalar(active ? (1 + Math.sin(state.totalTime * 4) * 0.22) : 1);
+
+                // Store labelReady for DOM labels
+                m.labelReady = labelReady && active;
             }
 
             // Data flows
@@ -1052,8 +1205,8 @@
 
             // Ground link
             if (state.showGroundLink) {
-                const loraPos = new THREE.Vector3();
-                markers.LORA.group.getWorldPosition(loraPos);
+                markers.LORA.group.getWorldPosition(_loraWorld);
+                const loraPos = _loraWorld;
                 const gsPos = gsBase.position;
 
                 const arr = beamGeo.attributes.position.array;
@@ -1075,7 +1228,8 @@
 
             // Background motion
             stars.rotation.y += 0.00015;
-            earth.rotation.y += 0.005 * dt;
+            if (earthMesh) earthMesh.rotation.y += 0.005 * dt;
+            if (cloudMesh) cloudMesh.rotation.y += 0.008 * dt; // Clouds move slightly faster
 
             // DOM labels
             updateLabels();
@@ -1092,7 +1246,7 @@
         function updateLabels() {
             for (const [k, m] of Object.entries(markers)) {
                 const el = labelEls[k];
-                if (!state.activeComponents.has(k)) {
+                if (!m.labelReady) {
                     el.classList.remove('visible');
                     continue;
                 }
@@ -1145,12 +1299,13 @@
             btnPause.textContent = state.paused ? '▶' : '⏸';
         });
         btnRestart.addEventListener('click', () => {
-            state.totalTime = 0;
             state.satOffset.set(0, 0, 0);
+            state.satDrift = 0;
             state.activeComponents.clear();
             state.dataFlows = [];
             state.showGroundLink = false;
-            enterScene(0);
+            groundGroup.visible = false;
+            doEnterScene(0);
         });
 
         document.addEventListener('keydown', e => {
@@ -1160,11 +1315,102 @@
             else if (e.code === 'ArrowLeft' && state.currentScene > 0) enterScene(state.currentScene - 1);
         });
 
-        addEventListener('resize', () => {
-            camera.aspect = innerWidth / innerHeight;
+        // ============================================================
+        // RESPONSIVENESS & INTERACTION
+        // ============================================================
+        function handleResize() {
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+            camera.aspect = w / h;
+            
+            // Adjust FOV for vertical screens so the satellite isn't cut off
+            if (camera.aspect < 1) {
+                camera.fov = 50; // Wider view for mobile
+            } else {
+                camera.fov = 35; // Cinematic view for desktop
+            }
+            
             camera.updateProjectionMatrix();
-            renderer.setSize(innerWidth, innerHeight);
+            renderer.setSize(w, h);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        }
+
+        window.addEventListener('resize', handleResize);
+        handleResize(); // Initial call
+
+        // Simple manual rotation takeover
+        let isDragging = false;
+        let previousMouseX = 0;
+        let resumeTimer = null;
+
+        container.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            previousMouseX = e.clientX;
+            state.paused = true;
+            clearTimeout(resumeTimer);
         });
+
+        window.addEventListener('mouseup', () => {
+            if (isDragging) {
+                isDragging = false;
+                // Resume animation after 4 seconds of inactivity
+                resumeTimer = setTimeout(() => { state.paused = false; }, 4000);
+            }
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                const deltaX = e.clientX - previousMouseX;
+                cubesatGroup.rotation.y += deltaX * 0.005;
+                previousMouseX = e.clientX;
+            }
+            
+            // Auto-hide UI logic
+            document.body.classList.remove('idle');
+            clearTimeout(hideTimer);
+            hideTimer = setTimeout(() => document.body.classList.add('idle'), 8000);
+        });
+
+        // Touch support for mobile
+        container.addEventListener('touchstart', (e) => {
+            isDragging = true;
+            previousMouseX = e.touches[0].clientX;
+            state.paused = true;
+            clearTimeout(resumeTimer);
+        }, { passive: true });
+
+        window.addEventListener('touchend', () => {
+            if (isDragging) {
+                isDragging = false;
+                resumeTimer = setTimeout(() => { state.paused = false; }, 4000);
+            }
+        });
+
+        window.addEventListener('touchmove', (e) => {
+            if (isDragging) {
+                const deltaX = e.touches[0].clientX - previousMouseX;
+                cubesatGroup.rotation.y += deltaX * 0.005;
+                previousMouseX = e.touches[0].clientX;
+            }
+        }, { passive: true });
+
+        // Keep screen awake for all-day display
+        let wakeLock = null;
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    wakeLock.addEventListener('release', () => { wakeLock = null; });
+                }
+            } catch (_) {}
+        }
+        requestWakeLock();
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') requestWakeLock();
+        });
+
+        // Auto-hide controls after 8s of no mouse movement
+        let hideTimer = setTimeout(() => document.body.classList.add('idle'), 8000);
 
         animate();
     </script>
